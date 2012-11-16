@@ -1,6 +1,8 @@
 package mazeoblig;
 
 import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
 import java.util.Random;
 
 import simulator.*;
@@ -15,23 +17,26 @@ public class Dummy {
 	private int currentPos;
 	private boolean first = true;
 	private int playerID;
+	//private PositionInMaze[] positions;
 	
-	public Dummy(VirtualUser user, PlayersInterface players) {
+	public Dummy(VirtualUser user, PlayersInterface players, UpdateListener listener) {
 		this.players = players;
 		firstPath = user.getFirstIterationLoop();
 		path = user.getIterationLoop();
+		//positions = new PositionInMaze[Maze.CLIENTS + 1];
+		
 		try {
-			playerID = players.join();
+			playerID = players.join(listener);
 		} catch (RemoteException e) {
 			e.printStackTrace();
 		}
 	}
 	
 	public void update(int time) {
-		currentTime += time;
+		currentTime += time;		
 		if (currentTime >= moveTime) {
 			currentTime -= moveTime;
-			moveTime = 200 + rand.nextInt(2000);
+			moveTime = 100 + rand.nextInt(900);
 			currentPos++;
 			if (!first) {
 				if (currentPos >= path.length) {

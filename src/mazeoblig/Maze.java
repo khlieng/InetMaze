@@ -1,11 +1,5 @@
 package mazeoblig;
 
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
-import java.applet.*;
 
 import simulator.*;
 
@@ -24,17 +18,27 @@ import simulator.*;
  */
 import java.rmi.RemoteException;
 import java.rmi.NotBoundException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.swing.JComboBox.KeySelectionManager;
 import javax.swing.Timer;
+
+import org.lwjgl.input.Keyboard;
+import org.newdawn.slick.*;
+import org.newdawn.slick.command.KeyControl;
 /**
  * Tegner opp maze i en applet, basert på definisjon som man finner på RMIServer
  * RMIServer på sin side  henter størrelsen fra definisjonen i Maze
  * @author asd
  *
  */
-public class Maze extends Applet {
+public class Maze extends BasicGame {
 
+	public static int CLIENTS = 50000;
+	
 	private BoxMazeInterface bm;
 	private Box[][] maze;
 	public static int DIM = 80;
@@ -50,11 +54,13 @@ public class Maze extends Applet {
 	private int playerID;
 
 	private PositionInMaze[] pos;
+	private PositionInMaze[] otherPlayers;
 
 	/**
 	 * Henter labyrinten fra RMIServer
 	 */
-	public void init() {
+	public Maze() {
+		super("Maze");
 		int size = dim;
 		/*
 		 ** Kobler opp mot RMIServer, under forutsetning av at disse
@@ -70,17 +76,32 @@ public class Maze extends Applet {
 			getRegistry(server_hostname,
 					server_portnumber);
 
+			otherPlayers = new PositionInMaze[Maze.CLIENTS + 1];
+			
+			UpdateListener client = new UpdateListener() {
+				public void pushPositions(ConcurrentHashMap<Integer, PositionInMaze> updatedPositions) throws RemoteException {
+					for (Entry<Integer, PositionInMaze> m : updatedPositions.entrySet()) {
+						if (m.getKey() != playerID) {
+							otherPlayers[m.getKey()] = m.getValue();
+						}
+					}
+				}
+			};
+			UnicastRemoteObject.exportObject(client, 0);
+			
+			
 			/*
 			 ** Henter inn referansen til Labyrinten (ROR)
 			 */
 			bm = (BoxMazeInterface) r.lookup(RMIServer.MazeName);
 			maze = bm.getMaze();
-			
+						
 			players = (PlayersInterface)r.lookup("Players");
-			playerID = players.join();
+			playerID = players.join(client);
 			
 			System.out.println("ID: " + playerID);
-			
+
+/*
 			addKeyListener(new KeyListener() {
 				public void keyPressed(KeyEvent e) {
 					if (e.getKeyCode() == KeyEvent.VK_A) {
@@ -111,7 +132,7 @@ public class Maze extends Applet {
 				public void actionPerformed(ActionEvent arg0) {
 					repaint();
 				}
-			}).start();
+			}).start();*/
 			
 /*
 ** Finner løsningene ut av maze - se forøvrig kildekode for VirtualMaze for ytterligere
@@ -145,28 +166,66 @@ public class Maze extends Applet {
 			System.exit(0);
 		}
 	}
-
-	//Get a parameter value
-	public String getParameter(String key, String def) {
-		return getParameter(key) != null ? getParameter(key) : def;
+	
+	public void keyPressed(int key, char c) {
+		if (key == Keyboard.KEY_A) {
+			xp--;
+		}
+		else if (key == Keyboard.KEY_D) {
+			xp++;
+		}
+		
+		if (key == Keyboard.KEY_W) {
+			yp--;
+		}
+		else if (key == Keyboard.KEY_S) {
+			yp++;
+		}
+		try {
+			players.updatePos(playerID, new PositionInMaze(xp, yp));
+		} catch (RemoteException e1) {
+			e1.printStackTrace();
+		}
 	}
-	//Get Applet information
-	public String getAppletInfo() {
-		return "Applet Information";
-	}
 
-	//Get parameter info
-	public String[][] getParameterInfo() {
-		java.lang.String[][] pinfo = { {"Size", "int", ""},
-		};
-		return pinfo;
+	public void render(GameContainer container, Graphics g) {
+		int x, y;
+		
+		g.setColor(new Color(64, 128, 64));
+		for (int i = 0; i < pos.length - 1; i++) {
+			g.drawLine(pos[i].getXpos() * 10 + 5, pos[i].getYpos() * 10 + 5, pos[i+1].getXpos() * 10 + 5, pos[i+1].getYpos() * 10 + 5);
+		}
+		
+		//PositionInMaze[] otherPlayers = players.getPositions(playerID);
+		g.setColor(Color.yellow);
+		for (PositionInMaze p : otherPlayers) {
+			if (p != null) {
+				g.fillOval(p.getXpos() * 10 + 2, p.getYpos() * 10 + 2, 6, 6);
+			}
+		}
+		
+		g.setColor(Color.red);
+		g.fillOval(xp * 10 + 1, yp * 10 + 1, 8, 8);
+		
+		// Tegner baser på box-definisjonene ....
+		g.setColor(Color.darkGray);
+		for (x = 1; x < (dim - 1); ++x)
+			for (y = 1; y < (dim - 1); ++y) {
+				if (maze[x][y].getUp() == null)
+					g.drawLine(x * 10, y * 10, x * 10 + 10, y * 10);
+				if (maze[x][y].getDown() == null)
+					g.drawLine(x * 10, y * 10 + 10, x * 10 + 10, y * 10 + 10);
+				if (maze[x][y].getLeft() == null)
+					g.drawLine(x * 10, y * 10, x * 10, y * 10 + 10);
+				if (maze[x][y].getRight() == null)
+					g.drawLine(x * 10 + 10, y * 10, x * 10 + 10, y * 10 + 10);
+			}
 	}
-
 	/**
 	 * Viser labyrinten / tegner den i applet
 	 * @param g Graphics
 	 */
-	public void paint (Graphics g) {
+	/*public void paint (Graphics g) {
 		int x, y;
 		
 		g.setColor(Color.GREEN);		
@@ -202,6 +261,29 @@ public class Maze extends Applet {
 				if (maze[x][y].getRight() == null)
 					g.drawLine(x * 10 + 10, y * 10, x * 10 + 10, y * 10 + 10);
 			}
+	}*/
+
+	@Override
+	public void init(GameContainer arg0) throws SlickException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void update(GameContainer arg0, int arg1) throws SlickException {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	public static void main(String[] args) {
+		try {
+			AppGameContainer app = new AppGameContainer(new Maze());
+			app.setDisplayMode(800, 800, false);
+			app.setShowFPS(false);
+			app.start();
+		} catch (SlickException e) {
+			e.printStackTrace();
+		}
 	}
 }
 

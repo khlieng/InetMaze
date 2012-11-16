@@ -6,6 +6,9 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.swing.Timer;
 
@@ -23,7 +26,7 @@ public class MazeDummy {
 	private static String server_hostname;
 	private static int server_portnumber;
 	
-	private static int nClients = 15000;
+	private static int nClients = Maze.CLIENTS;
 	private static Dummy[] dummies;
 	
 	public static void main(String[] args) {
@@ -42,6 +45,13 @@ public class MazeDummy {
 			getRegistry(server_hostname,
 					server_portnumber);
 
+			UpdateListener client = new UpdateListener() {
+				public void pushPositions(ConcurrentHashMap<Integer, PositionInMaze> updatedPositions) throws RemoteException {
+					
+				}
+			};
+			UnicastRemoteObject.exportObject(client, 0);
+			
 			/*
 			 ** Henter inn referansen til Labyrinten (ROR)
 			 */
@@ -53,7 +63,7 @@ public class MazeDummy {
 			dummies = new Dummy[nClients];
 			for (int i = 0; i < nClients; i++) {
 				VirtualUser vu = new VirtualUser(maze);
-				dummies[i] = new Dummy(vu, players);
+				dummies[i] = new Dummy(vu, players, client);
 			}
 			
 			while (true) {

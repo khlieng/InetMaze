@@ -38,7 +38,6 @@ public class RMIServer
   public static String MazeName = "Maze";
   private static Players players;
 
-
   public RMIServer() throws RemoteException, MalformedURLException,
                              NotBoundException, AlreadyBoundException {
     getStaticInfo();
