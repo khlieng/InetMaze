@@ -18,8 +18,6 @@ import simulator.VirtualUser;
 public class MazeDummy {
 	private static BoxMazeInterface bm;
 	private static Box[][] maze;
-	public static int DIM = 10;
-	private static int dim = DIM;
 	
 	public static PlayersInterface Players;
 	
@@ -29,11 +27,11 @@ public class MazeDummy {
 	private static int nClients = Maze.CLIENTS;
 	private static Dummy[] dummies;
 	
-	public static PositionInMaze[][][] PathPool;
-	public static int PoolSize = 4096;
+	public static PositionInMaze[][] InitialPathPool;
+	public static PositionInMaze[] Path;
+	public static int PoolSize = 1024;
 	
 	public static void main(String[] args) {
-		int size = dim;
 		/*
 		 ** Kobler opp mot RMIServer, under forutsetning av at disse
 		 ** kjører på samme maskin. Hvis ikke må oppkoblingen
@@ -45,14 +43,7 @@ public class MazeDummy {
 			server_portnumber = RMIServer.getRMIPort();
 		try {
 			java.rmi.registry.Registry r = java.rmi.registry.LocateRegistry.
-			getRegistry(server_hostname,
-					server_portnumber);
-
-			UpdateListener client = new UpdateListener() {
-				public void pushPositions(int[] updatedPositions) throws RemoteException {					
-				}
-			};
-			UnicastRemoteObject.exportObject(client, 0);
+			getRegistry(server_hostname, server_portnumber);
 			
 			/*
 			 ** Henter inn referansen til Labyrinten (ROR)
@@ -62,17 +53,17 @@ public class MazeDummy {
 			
 			Players = (PlayersInterface)r.lookup("Players");
 			
-			PathPool = new PositionInMaze[PoolSize][2][256];
+			// Prekalkulerer her et visst antall veier ut labyrinten for å få ned minnebruk per klient
+			InitialPathPool = new PositionInMaze[PoolSize][0];
 			for (int i = 0; i < PoolSize; i++) {
 				VirtualUser vu = new VirtualUser(maze);
-				PathPool[i][0] = vu.getFirstIterationLoop();
-				PathPool[i][1] = vu.getIterationLoop();
+				InitialPathPool[i] = vu.getFirstIterationLoop();
 			}
+			Path = new VirtualUser(maze).getIterationLoop();
 			
 			dummies = new Dummy[nClients];
 			for (int i = 0; i < nClients; i++) {
-				//VirtualUser vu = new VirtualUser(maze);
-				dummies[i] = new Dummy(client);
+				dummies[i] = new Dummy();
 			}
 			
 			while (true) {

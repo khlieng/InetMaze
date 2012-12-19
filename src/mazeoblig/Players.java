@@ -4,77 +4,76 @@ import java.rmi.RemoteException;
 import java.rmi.server.*;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import simulator.PositionInMaze;
 
 public class Players extends UnicastRemoteObject implements PlayersInterface {
-	//private static PositionInMaze[] positions;
 	private static UpdateListener[] listeners;
-	private static ConcurrentHashMap<Integer, PositionInMaze> updatedPositions;
-	//private static int count;
+	private static HashMap<Integer, PositionInMaze> updatedPositions;
 	private static int elapsed;
-	private ArrayList<UpdateListener> contains = new ArrayList<UpdateListener>();
-	private boolean locked = false;
-		
+	private static Lock l = new ReentrantLock();
+	
 	protected Players() throws RemoteException {
-		//positions = new PositionInMaze[Maze.CLIENTS + 1];
-		listeners = new UpdateListener[2];
-		updatedPositions = new ConcurrentHashMap<Integer, PositionInMaze>();
+		listeners = new UpdateListener[Maze.CLIENTS + 1];
+		updatedPositions = new HashMap<Integer, PositionInMaze>();
 		
+		// Tråden der oppdateringer skyves ut
 		new Thread(new Runnable() {
 			public void run() {
 				while (true) {
-					elapsed += 10;
+					long t = System.currentTimeMillis();
 					if (elapsed >= Maze.SRV_UPDATERATE) {
 						elapsed -= Maze.SRV_UPDATERATE;
-						/*for (int i = 0; i < listeners.length; i++) {
-							if (listeners[i] != null) {
-								try {
-									listeners[i].pushPositions(updatedPositions);
-								} catch (RemoteException e) {
-									e.printStackTrace();
+						try {
+							Set<Entry<Integer, PositionInMaze>> entries = null;
+							l.lock();
+							try {
+								HashMap<Integer, PositionInMaze> copy = new HashMap<Integer, PositionInMaze>(updatedPositions);
+								entries = copy.entrySet();
+							} finally {
+								l.unlock();
+							}
+							if (entries != null) {
+								int n = entries.size(), i = 0;
+								if (n > 0) {
+									int[] positions = new int[n];
+									for (Entry<Integer, PositionInMaze> entry : entries) {
+										int id = entry.getKey() << 16;
+										int x = entry.getValue().getXpos() << 8;
+										int y = entry.getValue().getYpos();
+										positions[i] = id | x | y;
+										i++;
+									}
+									try {
+										for (int j = 0; j < listeners.length; j++) {
+											if (listeners[j] != null)
+												listeners[j].pushPositions(positions);
+										}
+									} catch (RemoteException e) {
+										e.printStackTrace();
+									}
+									updatedPositions.clear();
 								}
 							}
-						}*/	
-						
-						//locked = true;
-						//Thread.sleep(1000);
-						//Set<Integer> keys = updatedPositions.keySet();
-						//Collection<PositionInMaze> vals = updatedPositions.values();
-						try {
-						int n = updatedPositions.size(), i = 0;
-						int[] positions = new int[n];
-							for (int key : updatedPositions.keySet()) {
-								int id = key << 16;
-								int x = updatedPositions.get(key).getXpos() << 8;
-								int y = updatedPositions.get(key).getYpos();
-								positions[i] = id | x | y;
-								i++;
-							}
-							try {
-								if (listeners[0] != null)
-									listeners[0].pushPositions(positions);
-								if (listeners[1] != null)
-									listeners[1].pushPositions(positions);
-							} catch (RemoteException e) {
-								e.printStackTrace();
-							}
 						} catch(Exception e) {
-							
+							System.out.println(e.getMessage());
 						}
-						//locked = false;
-						
-						
-						updatedPositions.clear();
 					}
+					
 					try {
-						Thread.sleep(10);
+						Thread.sleep(1);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
-					}
+					}					
+
+					elapsed += System.currentTimeMillis() - t;
 				}
 			}
 		}).start();
@@ -83,44 +82,20 @@ public class Players extends UnicastRemoteObject implements PlayersInterface {
 	int c = -1;
 	public int join(UpdateListener listener) throws RemoteException {
 		c++;
-		//positions[c] = new PositionInMaze(0, 0);
-		if (!contains.contains(listener)) {
-			listeners[c] = listener;
-			contains.add(listener);
-			//System.out.println(contains.size());
-		}
-		
-		//count++;
+		listeners[c] = listener;
 		return c;
 	}
 
 	public void updatePos(int position) throws RemoteException {
-		//positions[playerID] = pos;
-
 		int id = (position >> 16) & 65535;
 		int x = (position >> 8) & 255;
 		int y = position & 255;
 		
-		while (locked) {
-			try {
-				Thread.sleep(1);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		l.lock();
+		try {
+			updatedPositions.put(id, new PositionInMaze(x, y));
+		} finally {
+			l.unlock();
 		}
-		
-		updatedPositions.put(id, new PositionInMaze(x, y));
 	}
-
-	/*public PositionInMaze[] getPositions(int playerID) throws RemoteException {
-		PositionInMaze[] result = new PositionInMaze[count];
-		int c = 0;
-		for (int i = 0; i < positions.length; i++) {
-			if (positions[i] != null && i != playerID) {
-				result[c] = positions[i];
-				c++;
-			}
-		}
-		return result;
-	}*/
 }
