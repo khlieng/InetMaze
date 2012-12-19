@@ -37,11 +37,14 @@ import org.newdawn.slick.command.KeyControl;
  */
 public class Maze extends BasicGame {
 
-	public static int CLIENTS = 50000;
+	public static int CLIENTS = 1000;
+	public static int SRV_UPDATERATE = 50;
+	public static int DUMMY_WAIT_MIN = 200;
+	public static int DUMMY_WAIT_MAX = 1000;
 	
 	private BoxMazeInterface bm;
 	private Box[][] maze;
-	public static int DIM = 80;
+	public static int DIM = 50;
 	private int dim = DIM;
 
 	private PlayersInterface players;
@@ -55,6 +58,7 @@ public class Maze extends BasicGame {
 
 	private PositionInMaze[] pos;
 	private PositionInMaze[] otherPlayers;
+	private byte[][] map;
 
 	/**
 	 * Henter labyrinten fra RMIServer
@@ -75,14 +79,23 @@ public class Maze extends BasicGame {
 			java.rmi.registry.Registry r = java.rmi.registry.LocateRegistry.
 			getRegistry(server_hostname,
 					server_portnumber);
+			
+			map = new byte[50][50];
 
 			otherPlayers = new PositionInMaze[Maze.CLIENTS + 1];
+			for (int i = 0; i < otherPlayers.length; i++) {
+				otherPlayers[i] = new PositionInMaze(0, 0);
+			}
 			
 			UpdateListener client = new UpdateListener() {
-				public void pushPositions(ConcurrentHashMap<Integer, PositionInMaze> updatedPositions) throws RemoteException {
-					for (Entry<Integer, PositionInMaze> m : updatedPositions.entrySet()) {
-						if (m.getKey() != playerID) {
-							otherPlayers[m.getKey()] = m.getValue();
+				public void pushPositions(int[] updatedPositions) throws RemoteException {
+					for (int i = 0; i < updatedPositions.length; i++) {
+						int id = (updatedPositions[i] >> 16) & 65535;
+						int x = (updatedPositions[i] >> 8) & 255;
+						int y = (updatedPositions[i]) & 255;
+						if (id != playerID) {
+							otherPlayers[id].setXPos(x);
+							otherPlayers[id].setYPos(y);
 						}
 					}
 				}
@@ -182,43 +195,54 @@ public class Maze extends BasicGame {
 			yp++;
 		}
 		try {
-			players.updatePos(playerID, new PositionInMaze(xp, yp));
+			int id = playerID << 16;
+			int x = xp << 8;
+			int y = yp;
+			int position = id | x | y;
+			players.updatePos(position);
 		} catch (RemoteException e1) {
 			e1.printStackTrace();
 		}
 	}
 
+	int size = 10;
 	public void render(GameContainer container, Graphics g) {
 		int x, y;
 		
 		g.setColor(new Color(64, 128, 64));
 		for (int i = 0; i < pos.length - 1; i++) {
-			g.drawLine(pos[i].getXpos() * 10 + 5, pos[i].getYpos() * 10 + 5, pos[i+1].getXpos() * 10 + 5, pos[i+1].getYpos() * 10 + 5);
+			g.drawLine(pos[i].getXpos() * size + size / 2, pos[i].getYpos() * size + size / 2, pos[i+1].getXpos() * size + size / 2, pos[i+1].getYpos() * size + size / 2);
 		}
 		
-		//PositionInMaze[] otherPlayers = players.getPositions(playerID);
+		for (x = 0; x < DIM; x++) {
+			for (y = 0; y < DIM; y++) {
+				map[x][y] = 0;
+			}
+		}
+		
 		g.setColor(Color.yellow);
 		for (PositionInMaze p : otherPlayers) {
-			if (p != null) {
-				g.fillOval(p.getXpos() * 10 + 2, p.getYpos() * 10 + 2, 6, 6);
+			if (p != null && map[p.getXpos()][p.getYpos()] == 0) {
+				map[p.getXpos()][p.getYpos()] = 1;
+				g.fillOval(p.getXpos() * size + 1, p.getYpos() * size + 1, 3, 3);
 			}
 		}
 		
 		g.setColor(Color.red);
-		g.fillOval(xp * 10 + 1, yp * 10 + 1, 8, 8);
+		g.fillOval(xp * size + 1, yp * size + 1, 4, 4);
 		
 		// Tegner baser på box-definisjonene ....
 		g.setColor(Color.darkGray);
 		for (x = 1; x < (dim - 1); ++x)
 			for (y = 1; y < (dim - 1); ++y) {
 				if (maze[x][y].getUp() == null)
-					g.drawLine(x * 10, y * 10, x * 10 + 10, y * 10);
+					g.drawLine(x * size, y * size, x * size + size, y * size);
 				if (maze[x][y].getDown() == null)
-					g.drawLine(x * 10, y * 10 + 10, x * 10 + 10, y * 10 + 10);
+					g.drawLine(x * size, y * size + size, x * size + size, y * size + size);
 				if (maze[x][y].getLeft() == null)
-					g.drawLine(x * 10, y * 10, x * 10, y * 10 + 10);
+					g.drawLine(x * size, y * size, x * size, y * size + size);
 				if (maze[x][y].getRight() == null)
-					g.drawLine(x * 10 + 10, y * 10, x * 10 + 10, y * 10 + 10);
+					g.drawLine(x * size + size, y * size, x * size + size, y * size + size);
 			}
 	}
 	/**
@@ -278,8 +302,8 @@ public class Maze extends BasicGame {
 	public static void main(String[] args) {
 		try {
 			AppGameContainer app = new AppGameContainer(new Maze());
-			app.setDisplayMode(800, 800, false);
-			app.setShowFPS(false);
+			app.setDisplayMode(500, 500, false);
+			//app.setShowFPS(false);
 			app.start();
 		} catch (SlickException e) {
 			e.printStackTrace();

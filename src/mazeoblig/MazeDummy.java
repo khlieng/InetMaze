@@ -21,13 +21,16 @@ public class MazeDummy {
 	public static int DIM = 10;
 	private static int dim = DIM;
 	
-	private static PlayersInterface players;
+	public static PlayersInterface Players;
 	
 	private static String server_hostname;
 	private static int server_portnumber;
 	
 	private static int nClients = Maze.CLIENTS;
 	private static Dummy[] dummies;
+	
+	public static PositionInMaze[][][] PathPool;
+	public static int PoolSize = 4096;
 	
 	public static void main(String[] args) {
 		int size = dim;
@@ -46,8 +49,7 @@ public class MazeDummy {
 					server_portnumber);
 
 			UpdateListener client = new UpdateListener() {
-				public void pushPositions(ConcurrentHashMap<Integer, PositionInMaze> updatedPositions) throws RemoteException {
-					
+				public void pushPositions(int[] updatedPositions) throws RemoteException {					
 				}
 			};
 			UnicastRemoteObject.exportObject(client, 0);
@@ -58,12 +60,19 @@ public class MazeDummy {
 			bm = (BoxMazeInterface) r.lookup(RMIServer.MazeName);
 			maze = bm.getMaze();
 			
-			players = (PlayersInterface)r.lookup("Players");
+			Players = (PlayersInterface)r.lookup("Players");
+			
+			PathPool = new PositionInMaze[PoolSize][2][256];
+			for (int i = 0; i < PoolSize; i++) {
+				VirtualUser vu = new VirtualUser(maze);
+				PathPool[i][0] = vu.getFirstIterationLoop();
+				PathPool[i][1] = vu.getIterationLoop();
+			}
 			
 			dummies = new Dummy[nClients];
 			for (int i = 0; i < nClients; i++) {
-				VirtualUser vu = new VirtualUser(maze);
-				dummies[i] = new Dummy(vu, players, client);
+				//VirtualUser vu = new VirtualUser(maze);
+				dummies[i] = new Dummy(client);
 			}
 			
 			while (true) {

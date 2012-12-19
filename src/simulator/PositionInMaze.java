@@ -18,6 +18,14 @@ public class PositionInMaze implements Serializable {
 		return ypos;
 	}
 	
+	public void setXPos(int x) {
+		xpos = x;
+	}
+	
+	public void setYPos(int y) {
+		ypos = y;
+	}
+	
 	public String toString() {
 		return "xpos: " + xpos + "\typos: " + ypos;
 	}

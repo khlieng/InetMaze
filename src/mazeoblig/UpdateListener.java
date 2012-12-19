@@ -9,5 +9,5 @@ import java.util.concurrent.ConcurrentHashMap;
 import simulator.PositionInMaze;
 
 public interface UpdateListener extends Remote {
-	void pushPositions(ConcurrentHashMap<Integer, PositionInMaze> updatedPositions) throws RemoteException;
+	void pushPositions(int[] updatedPositions) throws RemoteException;
 }
